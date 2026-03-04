@@ -5,18 +5,24 @@ import Combine
 final class AppViewModel: ObservableObject {
     @Published var state: AppState {
         didSet {
-            persist()
+            schedulePersist()
         }
     }
 
     @Published var currentTripStartedAt: Date
 
+    private var persistTask: Task<Void, Never>?
+
     init() {
-        let loaded = Self.loadState()
-        state = loaded
+        state = .empty
         currentTripStartedAt = Date()
-        if !loaded.currentCart.items.isEmpty {
-            currentTripStartedAt = Date()
+        Task { @MainActor in
+            let loaded = Self.loadState()
+            state = loaded
+            if !loaded.currentCart.items.isEmpty {
+                currentTripStartedAt = Date()
+            }
+            schedulePersist()
         }
     }
 
@@ -158,12 +164,20 @@ final class AppViewModel: ObservableObject {
         }.sorted(by: { $0.total > $1.total })
     }
 
-    private func persist() {
+    private func schedulePersist() {
+        persistTask?.cancel()
+        persistTask = Task { [state] in
+            try? await Task.sleep(nanoseconds: 300_000_000)
+            Self.persist(state: state)
+        }
+    }
+
+    private static func persist(state: AppState) {
         do {
             let data = try JSONEncoder().encode(state)
-            UserDefaults.standard.set(data, forKey: Self.storageKey)
+            UserDefaults.standard.set(data, forKey: storageKey)
         } catch {
-            UserDefaults.standard.removeObject(forKey: Self.storageKey)
+            UserDefaults.standard.removeObject(forKey: storageKey)
         }
     }
 
