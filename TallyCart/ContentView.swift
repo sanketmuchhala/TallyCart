@@ -1,5 +1,6 @@
 import SwiftUI
 import Combine
+import CoreLocation
 
 struct CartItem: Identifiable, Codable, Equatable {
     let id: UUID
@@ -23,7 +24,26 @@ struct CartState: Codable, Equatable {
     var includeTax: Bool
     var taxRate: Double
 
-    static let empty = CartState(items: [], includeTax: false, taxRate: 0)
+    static let empty = CartState(items: [], includeTax: true, taxRate: 5.3)
+}
+
+struct TripSummary: Identifiable, Codable, Equatable {
+    let id: UUID
+    let date: Date
+    let items: [CartItem]
+    let itemCount: Int
+    let subtotal: Double
+    let taxAmount: Double
+    let total: Double
+    let includeTax: Bool
+    let taxRate: Double
+    let locationName: String
+    let locationLatitude: Double?
+    let locationLongitude: Double?
+
+    var displayLocationName: String {
+        "[Demo] \(locationName)"
+    }
 }
 
 final class CartViewModel: ObservableObject {
@@ -33,8 +53,15 @@ final class CartViewModel: ObservableObject {
         }
     }
 
+    @Published var tripHistory: [TripSummary] {
+        didSet {
+            persistHistory()
+        }
+    }
+
     init() {
         state = Self.loadState()
+        tripHistory = Self.loadHistory()
     }
 
     var subtotal: Double {
@@ -61,8 +88,9 @@ final class CartViewModel: ObservableObject {
         state.items.remove(at: index)
     }
 
-    func clear() {
-        state = .empty
+    func updateQuantity(id: UUID, quantity: Int) {
+        guard let index = state.items.firstIndex(where: { $0.id == id }) else { return }
+        state.items[index].quantity = max(1, min(99, quantity))
     }
 
     func updateIncludeTax(_ include: Bool) {
@@ -71,6 +99,34 @@ final class CartViewModel: ObservableObject {
 
     func updateTaxRate(_ rate: Double) {
         state.taxRate = rate
+    }
+
+    func clearItems(keepTaxSettings: Bool = true) {
+        let includeTax = keepTaxSettings ? state.includeTax : true
+        let taxRate = keepTaxSettings ? state.taxRate : Self.defaultTaxRate
+        state = CartState(items: [], includeTax: includeTax, taxRate: taxRate)
+    }
+
+    func finishTrip(locationName: String, location: CLLocation?) {
+        guard !state.items.isEmpty else { return }
+        let locationLatitude = location?.coordinate.latitude
+        let locationLongitude = location?.coordinate.longitude
+        let summary = TripSummary(
+            id: UUID(),
+            date: Date(),
+            items: state.items,
+            itemCount: state.items.count,
+            subtotal: subtotal,
+            taxAmount: taxAmount,
+            total: total,
+            includeTax: state.includeTax,
+            taxRate: state.taxRate,
+            locationName: locationName,
+            locationLatitude: locationLatitude,
+            locationLongitude: locationLongitude
+        )
+        tripHistory.insert(summary, at: 0)
+        clearItems(keepTaxSettings: true)
     }
 
     private func persist() {
@@ -94,7 +150,30 @@ final class CartViewModel: ObservableObject {
         }
     }
 
+    private func persistHistory() {
+        do {
+            let data = try JSONEncoder().encode(tripHistory)
+            UserDefaults.standard.set(data, forKey: Self.historyKey)
+        } catch {
+            UserDefaults.standard.removeObject(forKey: Self.historyKey)
+        }
+    }
+
+    private static func loadHistory() -> [TripSummary] {
+        guard let data = UserDefaults.standard.data(forKey: historyKey) else {
+            return []
+        }
+        do {
+            return try JSONDecoder().decode([TripSummary].self, from: data)
+        } catch {
+            UserDefaults.standard.removeObject(forKey: historyKey)
+            return []
+        }
+    }
+
     private static let storageKey = "tallycart_state"
+    private static let historyKey = "tallycart_trip_history"
+    private static let defaultTaxRate = 5.3
     private static let symbols = ["cart", "tag", "cart.fill", "bag", "creditcard", "basket", "shippingbox"]
 }
 
@@ -106,12 +185,16 @@ enum FocusedField: Hashable {
 
 struct ContentView: View {
     @StateObject private var viewModel = CartViewModel()
+    @StateObject private var locationProvider = LocationProvider()
 
     @State private var itemName: String = ""
     @State private var priceText: String = ""
     @State private var quantity: Int = 1
-    @State private var taxRateText: String = "0.0"
+    @State private var taxRateText: String = "5.3"
     @State private var showClearConfirm = false
+    @State private var showFinishConfirm = false
+    @State private var activeSwipeItemID: UUID?
+    @State private var selectedTrip: TripSummary?
 
     @FocusState private var focusedField: FocusedField?
 
@@ -153,20 +236,33 @@ struct ContentView: View {
                             EmptyStateCard()
                         } else {
                             LazyVStack(spacing: 12) {
-                                ForEach(viewModel.state.items) { item in
-                                    ItemRow(item: item, lineTotal: item.lineTotal)
-                                        .swipeActions(edge: .trailing, allowsFullSwipe: true) {
-                                            Button(role: .destructive) {
-                                                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                                                    viewModel.delete(item: item)
-                                                }
-                                            } label: {
-                                                Label("Delete", systemImage: "trash")
+                                ForEach(viewModel.state.items.indices, id: \.self) { index in
+                                    let item = viewModel.state.items[index]
+                                    ItemRow(
+                                        item: item,
+                                        lineTotal: item.lineTotal,
+                                        quantity: Binding(
+                                            get: { viewModel.state.items[index].quantity },
+                                            set: { newValue in
+                                                viewModel.updateQuantity(id: item.id, quantity: newValue)
+                                            }
+                                        ),
+                                        activeSwipeItemID: $activeSwipeItemID,
+                                        onDelete: {
+                                            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                                                viewModel.delete(item: item)
                                             }
                                         }
+                                    )
                                 }
                             }
                             .animation(.spring(response: 0.35, dampingFraction: 0.85), value: viewModel.state.items)
+                        }
+
+                        if !viewModel.tripHistory.isEmpty {
+                            TripHistorySection(trips: viewModel.tripHistory) { trip in
+                                selectedTrip = trip
+                            }
                         }
                     }
                     .padding(.horizontal, 16)
@@ -186,18 +282,39 @@ struct ContentView: View {
             }
             .safeAreaInset(edge: .bottom) {
                 BottomActionBar(
+                    canFinish: !viewModel.state.items.isEmpty,
                     canClear: !viewModel.state.items.isEmpty,
+                    onFinishTrip: {
+                        showFinishConfirm = true
+                    },
                     onNewTrip: {
                         showClearConfirm = true
                     }
                 )
+            }
+            .alert("Finish this trip?", isPresented: $showFinishConfirm) {
+                Button("Cancel", role: .cancel) {}
+                Button("Finish Trip") {
+                    triggerHaptics()
+                    Task {
+                        let resolved = await resolveLocation()
+                        await MainActor.run {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                                viewModel.finishTrip(locationName: resolved.name, location: resolved.location)
+                            }
+                            resetInputs()
+                        }
+                    }
+                }
+            } message: {
+                Text("We will store this trip in your history and clear the cart.")
             }
             .alert("Start a new trip?", isPresented: $showClearConfirm) {
                 Button("Cancel", role: .cancel) {}
                 Button("New Trip", role: .destructive) {
                     triggerHaptics()
                     withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                        viewModel.clear()
+                        viewModel.clearItems(keepTaxSettings: true)
                     }
                     resetInputs()
                 }
@@ -211,6 +328,9 @@ struct ContentView: View {
                 if formattedTaxRate(newValue) != taxRateText {
                     taxRateText = formattedTaxRate(newValue)
                 }
+            }
+            .fullScreenCover(item: $selectedTrip) { trip in
+                TripDetailView(trip: trip)
             }
         }
     }
@@ -283,6 +403,32 @@ struct ContentView: View {
     private func triggerHaptics() {
         let generator = UIImpactFeedbackGenerator(style: .light)
         generator.impactOccurred()
+    }
+
+    private func resolveLocation() async -> (name: String, location: CLLocation?) {
+        if Bundle.main.object(forInfoDictionaryKey: "NSLocationWhenInUseUsageDescription") == nil {
+            return ("Unknown (Demo)", nil)
+        }
+
+        if locationProvider.authorizationStatus == .notDetermined {
+            locationProvider.requestAuthorization()
+        }
+
+        if locationProvider.authorizationStatus == .denied || locationProvider.authorizationStatus == .restricted {
+            if let cached = locationProvider.lastLocation {
+                let name = await locationProvider.reverseGeocodeName(from: cached)
+                return (name ?? "Unknown (Demo)", cached)
+            }
+            return ("Unknown (Demo)", nil)
+        }
+
+        do {
+            let location = try await locationProvider.requestLocation()
+            let name = await locationProvider.reverseGeocodeName(from: location)
+            return (name ?? "Unknown (Demo)", location)
+        } catch {
+            return ("Unknown (Demo)", nil)
+        }
     }
 }
 
@@ -410,7 +556,7 @@ struct AddItemCard: View {
                             .foregroundStyle(.primary)
                         Spacer()
                         HStack(spacing: 6) {
-                            TextField("0.0", text: $taxRateText)
+                            TextField("5.3", text: $taxRateText)
                                 .keyboardType(.decimalPad)
                                 .multilineTextAlignment(.trailing)
                                 .frame(width: 70)
@@ -473,6 +619,253 @@ struct AddItemCard: View {
 struct ItemRow: View {
     let item: CartItem
     let lineTotal: Double
+    @Binding var quantity: Int
+    @Binding var activeSwipeItemID: UUID?
+    let onDelete: () -> Void
+
+    @State private var offset: CGFloat = 0
+    @State private var isHorizontalDrag = false
+
+    private let swipeThreshold: CGFloat = -90
+    private let deleteThreshold: CGFloat = -160
+
+    var body: some View {
+        ZStack(alignment: .trailing) {
+            deleteBackground
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+
+            rowContent
+                .padding(16)
+                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .shadow(color: Color.primary.opacity(0.05), radius: 8, x: 0, y: 4)
+                .offset(x: offset)
+                .highPriorityGesture(dragGesture)
+                .onTapGesture {
+                    closeSwipe()
+                }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(item.displayName), \(quantity) at \(item.unitPrice.currencyString), total \(lineTotal.currencyString)")
+        .onChange(of: activeSwipeItemID) { _, newValue in
+            if newValue != item.id {
+                closeSwipe()
+            }
+        }
+    }
+
+    private var rowContent: some View {
+        HStack(spacing: 12) {
+            ZStack {
+                Circle()
+                    .fill(.ultraThinMaterial)
+                    .frame(width: 44, height: 44)
+                Image(systemName: item.symbolName)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(.primary)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(item.displayName)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                Text("\(quantity) x \(item.unitPrice.currencyString)")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 6) {
+                Text(lineTotal.currencyString)
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                HStack(spacing: 6) {
+                    Text("Qty \(quantity)")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Stepper("", value: $quantity, in: 1...99)
+                        .labelsHidden()
+                        .accessibilityLabel("Quantity")
+                        .accessibilityValue("\(quantity)")
+                }
+            }
+        }
+    }
+
+    private var deleteBackground: some View {
+        HStack {
+            Spacer()
+            Button(role: .destructive, action: performDelete) {
+                VStack(spacing: 4) {
+                    Image(systemName: "trash")
+                        .font(.system(size: 18, weight: .semibold))
+                    Text("Delete")
+                        .font(.caption2.weight(.semibold))
+                }
+                .foregroundStyle(.primary)
+                .frame(width: 88)
+                .frame(maxHeight: .infinity)
+                .background(Color(.systemBackground))
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var dragGesture: some Gesture {
+        DragGesture(minimumDistance: 10)
+            .onChanged { value in
+                let translationX = value.translation.width
+                let translationY = value.translation.height
+                if !isHorizontalDrag {
+                    isHorizontalDrag = abs(translationX) > abs(translationY)
+                }
+                guard isHorizontalDrag else { return }
+                activeSwipeItemID = item.id
+                if translationX < 0 {
+                    offset = max(translationX, deleteThreshold)
+                } else {
+                    offset = min(translationX, 0)
+                }
+            }
+            .onEnded { value in
+                let translation = value.translation.width
+                isHorizontalDrag = false
+                if translation <= deleteThreshold {
+                    performDelete()
+                    return
+                }
+                if translation <= swipeThreshold {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                        offset = swipeThreshold
+                    }
+                } else {
+                    closeSwipe()
+                }
+            }
+    }
+
+    private func performDelete() {
+        closeSwipe()
+        onDelete()
+    }
+
+    private func closeSwipe() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.85)) {
+            offset = 0
+        }
+        if activeSwipeItemID == item.id {
+            activeSwipeItemID = nil
+        }
+    }
+}
+
+struct TripHistorySection: View {
+    let trips: [TripSummary]
+    let onSelect: (TripSummary) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("Trip History")
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.primary)
+
+            VStack(spacing: 10) {
+                ForEach(trips) { trip in
+                    Button {
+                        onSelect(trip)
+                    } label: {
+                        TripHistoryRow(trip: trip)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(.top, 8)
+    }
+}
+
+struct TripHistoryRow: View {
+    let trip: TripSummary
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(trip.displayLocationName)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Text(trip.date.formatted(date: .abbreviated, time: .shortened))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text("\(trip.itemCount) items • \(trip.includeTax ? "Tax \(trip.taxRate.formattedNumber)%" : "No tax")")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Spacer()
+            Text(trip.total.currencyString)
+                .font(.headline)
+                .foregroundStyle(.primary)
+        }
+        .padding(14)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .shadow(color: Color.primary.opacity(0.04), radius: 6, x: 0, y: 3)
+    }
+}
+
+struct TripDetailView: View {
+    let trip: TripSummary
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 16) {
+                    HeaderCard(
+                        subtotal: trip.subtotal,
+                        taxAmount: trip.taxAmount,
+                        total: trip.total,
+                        includeTax: trip.includeTax
+                    )
+
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("Trip Details")
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(.primary)
+                        Text(trip.displayLocationName)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.primary)
+                        Text(trip.date.formatted(date: .abbreviated, time: .shortened))
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(16)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .shadow(color: Color.primary.opacity(0.05), radius: 8, x: 0, y: 4)
+
+                    LazyVStack(spacing: 12) {
+                        ForEach(trip.items) { item in
+                            ItemRowReadOnly(item: item)
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 16)
+                .padding(.bottom, 32)
+            }
+            .navigationTitle("Trip")
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Close") {
+                        dismiss()
+                    }
+                }
+            }
+        }
+    }
+}
+
+struct ItemRowReadOnly: View {
+    let item: CartItem
 
     var body: some View {
         HStack(spacing: 12) {
@@ -496,15 +889,69 @@ struct ItemRow: View {
 
             Spacer()
 
-            Text(lineTotal.currencyString)
+            Text(item.lineTotal.currencyString)
                 .font(.headline)
                 .foregroundStyle(.primary)
         }
         .padding(16)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
         .shadow(color: Color.primary.opacity(0.05), radius: 8, x: 0, y: 4)
-        .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(item.displayName), \(item.quantity) at \(item.unitPrice.currencyString), total \(lineTotal.currencyString)")
+    }
+}
+
+final class LocationProvider: NSObject, ObservableObject, CLLocationManagerDelegate {
+    private let manager = CLLocationManager()
+    private var locationContinuation: CheckedContinuation<CLLocation, Error>?
+    @Published private(set) var lastLocation: CLLocation?
+
+    override init() {
+        super.init()
+        manager.delegate = self
+        manager.desiredAccuracy = kCLLocationAccuracyHundredMeters
+    }
+
+    var authorizationStatus: CLAuthorizationStatus {
+        manager.authorizationStatus
+    }
+
+    func requestAuthorization() {
+        manager.requestWhenInUseAuthorization()
+    }
+
+    func requestLocation() async throws -> CLLocation {
+        try await withCheckedThrowingContinuation { continuation in
+            locationContinuation = continuation
+            manager.requestLocation()
+        }
+    }
+
+    func reverseGeocodeName(from location: CLLocation) async -> String? {
+        let geocoder = CLGeocoder()
+        do {
+            let placemarks = try await geocoder.reverseGeocodeLocation(location)
+            guard let placemark = placemarks.first else { return nil }
+            if let name = placemark.name, !name.isEmpty {
+                return name
+            }
+            if let locality = placemark.locality, let region = placemark.administrativeArea {
+                return "\(locality), \(region)"
+            }
+            return placemark.administrativeArea ?? placemark.country
+        } catch {
+            return nil
+        }
+    }
+
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        guard let location = locations.first else { return }
+        lastLocation = location
+        locationContinuation?.resume(returning: location)
+        locationContinuation = nil
+    }
+
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        locationContinuation?.resume(throwing: error)
+        locationContinuation = nil
     }
 }
 
@@ -529,11 +976,21 @@ struct EmptyStateCard: View {
 }
 
 struct BottomActionBar: View {
+    let canFinish: Bool
     let canClear: Bool
+    let onFinishTrip: () -> Void
     let onNewTrip: () -> Void
 
     var body: some View {
-        HStack {
+        HStack(spacing: 12) {
+            Button(action: onFinishTrip) {
+                Label("Finish Trip", systemImage: "checkmark.seal.fill")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .disabled(!canFinish)
+
             Button(role: .destructive, action: onNewTrip) {
                 Label("New Trip", systemImage: "trash")
                     .frame(maxWidth: .infinity)
@@ -545,6 +1002,16 @@ struct BottomActionBar: View {
         .padding(.horizontal, 16)
         .padding(.vertical, 12)
         .background(.ultraThinMaterial)
+    }
+}
+
+extension Double {
+    var formattedNumber: String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.minimumFractionDigits = 0
+        formatter.maximumFractionDigits = 2
+        return formatter.string(from: NSNumber(value: self)) ?? "0"
     }
 }
 
