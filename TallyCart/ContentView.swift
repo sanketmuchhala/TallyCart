@@ -1,7 +1,8 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var viewModel = AppViewModel()
+    @ObservedObject var viewModel: AppViewModel
+    @ObservedObject var authViewModel: AuthViewModel
 
     var body: some View {
         Group {
@@ -9,12 +10,12 @@ struct ContentView: View {
                 SplashView()
             } else {
                 TabView {
-                    CartView(viewModel: viewModel)
+                    CartView(viewModel: viewModel, authViewModel: authViewModel)
                         .tabItem {
                             Label("Cart", systemImage: "cart")
                         }
 
-                    HistoryView(viewModel: viewModel)
+                    HistoryView(viewModel: viewModel, authViewModel: authViewModel)
                         .tabItem {
                             Label("History", systemImage: "clock")
                         }
@@ -25,8 +26,9 @@ struct ContentView: View {
 }
 
 #Preview {
-    ContentView()
+    ContentView(viewModel: AppViewModel(), authViewModel: AuthViewModel())
 }
+
 // Match the static launch screen and provide a smooth handoff with a subtle animation.
 private struct SplashView: View {
     @State private var animate = false

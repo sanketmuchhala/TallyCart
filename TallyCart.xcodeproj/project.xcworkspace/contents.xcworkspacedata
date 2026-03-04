@@ -20,4 +20,7 @@
    <FileRef
       location = "group:README.md">
    </FileRef>
+   <FileRef
+      location = "group:SETUP_NOTES.md">
+   </FileRef>
 </Workspace>

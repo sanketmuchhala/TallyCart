@@ -1,6 +1,7 @@
 import Foundation
 import SwiftUI
 import Combine
+import Supabase
 
 final class AppViewModel: ObservableObject {
     @Published var state: AppState {
@@ -11,8 +12,12 @@ final class AppViewModel: ObservableObject {
 
     @Published var currentTripStartedAt: Date
     @Published var isLoading: Bool = true
+    @Published var isSyncing: Bool = false
+    @Published var syncErrorMessage: String?
 
     private var persistTask: Task<Void, Never>?
+    private var repository: TripsRepository?
+    private var userId: UUID?
 
     init() {
         state = .empty
@@ -48,6 +53,16 @@ final class AppViewModel: ObservableObject {
         return state.stores.first { $0.id == id }
     }
 
+    func configureSupabase(client: SupabaseClient, userId: UUID) {
+        repository = TripsRepository(client: client)
+        self.userId = userId
+    }
+
+    func clearSupabase() {
+        repository = nil
+        userId = nil
+    }
+
     func addStore(name: String, colorKey: String) {
         let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
@@ -56,6 +71,7 @@ final class AppViewModel: ObservableObject {
         if state.selectedStoreId == nil {
             state.selectedStoreId = store.id
         }
+        Task { await uploadStoreIfPossible(store) }
     }
 
     func selectStore(_ storeId: UUID?) {
@@ -132,8 +148,10 @@ final class AppViewModel: ObservableObject {
             total: total
         )
         state.trips.insert(trip, at: 0)
+        markTripPending(trip.id)
         clearCart(keepTaxSettings: true)
         currentTripStartedAt = Date()
+        Task { await uploadTripIfPossible(trip) }
     }
 
     func tripsGroupedByMonth() -> [(month: Date, trips: [Trip])] {
@@ -168,6 +186,120 @@ final class AppViewModel: ObservableObject {
         }.sorted(by: { $0.total > $1.total })
     }
 
+    func syncFromSupabase() async {
+        guard let repository, let userId else { return }
+        await MainActor.run {
+            isSyncing = true
+            syncErrorMessage = nil
+        }
+        do {
+            let remoteStores = try await repository.fetchStores(userId: userId)
+            let remoteTrips = try await repository.fetchTrips(userId: userId)
+            await MainActor.run {
+                mergeStores(remoteStores)
+                mergeTrips(remoteTrips)
+                isSyncing = false
+            }
+            try await uploadMissingStores(remoteStores: remoteStores)
+            await uploadPendingTrips()
+        } catch {
+            await MainActor.run {
+                isSyncing = false
+                syncErrorMessage = "Sync failed. We'll retry on the next launch."
+            }
+        }
+    }
+
+    func uploadPendingTrips() async {
+        guard let repository, let userId else { return }
+        let pendingIds = await MainActor.run { Set(state.pendingTripIds) }
+        let trips = await MainActor.run { state.trips.filter { pendingIds.contains($0.id) } }
+        for trip in trips {
+            do {
+                try await repository.insertTrip(trip, userId: userId)
+                await MainActor.run { removePendingTripId(trip.id) }
+            } catch {
+                await MainActor.run {
+                    syncErrorMessage = "Some trips are waiting to upload."
+                }
+                break
+            }
+        }
+    }
+
+    private func uploadTripIfPossible(_ trip: Trip) async {
+        guard let repository, let userId else { return }
+        do {
+            try await repository.insertTrip(trip, userId: userId)
+            await MainActor.run { removePendingTripId(trip.id) }
+        } catch {
+            await MainActor.run {
+                syncErrorMessage = "Trip saved locally and will sync when online."
+            }
+        }
+    }
+
+    private func uploadStoreIfPossible(_ store: StoreLocation) async {
+        guard let repository, let userId else { return }
+        do {
+            try await repository.insertStore(store, userId: userId)
+        } catch {
+            await MainActor.run {
+                syncErrorMessage = "Store saved locally and will sync later."
+            }
+        }
+    }
+
+    private func uploadMissingStores(remoteStores: [StoreLocation]) async throws {
+        guard let repository, let userId else { return }
+        let remoteIds = Set(remoteStores.map { $0.id })
+        let localStores = await MainActor.run { state.stores }
+        let missing = localStores.filter { !remoteIds.contains($0.id) }
+        for store in missing {
+            try await repository.insertStore(store, userId: userId)
+        }
+    }
+
+    private func mergeStores(_ remoteStores: [StoreLocation]) {
+        let localById = Dictionary(uniqueKeysWithValues: state.stores.map { ($0.id, $0) })
+        let remoteIds = Set(remoteStores.map { $0.id })
+        var merged: [StoreLocation] = remoteStores.map { remote in
+            if let local = localById[remote.id] {
+                return StoreLocation(
+                    id: remote.id,
+                    name: remote.name,
+                    colorKey: remote.colorKey,
+                    createdAt: remote.createdAt,
+                    plannedItems: local.plannedItems
+                )
+            }
+            return remote
+        }
+        let localOnly = state.stores.filter { !remoteIds.contains($0.id) }
+        merged.append(contentsOf: localOnly)
+        state.stores = merged
+        if state.selectedStoreId == nil {
+            state.selectedStoreId = merged.first?.id
+        }
+    }
+
+    private func mergeTrips(_ remoteTrips: [Trip]) {
+        let remoteIds = Set(remoteTrips.map { $0.id })
+        let localOnly = state.trips.filter { !remoteIds.contains($0.id) }
+        state.trips = (remoteTrips + localOnly).sorted(by: { $0.finishedAt > $1.finishedAt })
+        state.pendingTripIds.removeAll { remoteIds.contains($0) }
+    }
+
+    private func markTripPending(_ tripId: UUID) {
+        if !state.pendingTripIds.contains(tripId) {
+            state.pendingTripIds.append(tripId)
+        }
+    }
+
+    private func removePendingTripId(_ tripId: UUID) {
+        state.pendingTripIds.removeAll { $0 == tripId }
+    }
+
     private func schedulePersist() {
         persistTask?.cancel()
         persistTask = Task { [state] in
@@ -175,7 +307,6 @@ final class AppViewModel: ObservableObject {
             AppStateStore.persist(state)
         }
     }
-
 
     private static func loadStateAsync() async -> AppState {
         await withCheckedContinuation { continuation in
@@ -187,7 +318,6 @@ final class AppViewModel: ObservableObject {
 
     private static let symbols = ["cart", "tag", "cart.fill", "bag", "creditcard", "basket", "shippingbox"]
 }
-
 
 struct StorePalette {
     static let keys = ["blue", "indigo", "purple", "pink", "red", "orange", "yellow", "green", "mint", "teal"]

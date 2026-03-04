@@ -3,6 +3,7 @@ import UIKit
 
 struct CartView: View {
     @ObservedObject var viewModel: AppViewModel
+    @ObservedObject var authViewModel: AuthViewModel
 
     @State private var itemName: String = ""
     @State private var priceText: String = ""
@@ -30,6 +31,12 @@ struct CartView: View {
                         total: viewModel.total,
                         includeTax: viewModel.state.currentCart.includeTax
                     )
+
+                    if viewModel.isSyncing {
+                        SyncStatusView(text: "Syncing", systemImage: "arrow.triangle.2.circlepath")
+                    } else if let message = viewModel.syncErrorMessage {
+                        SyncStatusView(text: message, systemImage: "icloud.slash")
+                    }
 
                     StorePickerView(
                         stores: viewModel.state.stores,
@@ -95,6 +102,9 @@ struct CartView: View {
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
                     Button("Done") { focusedField = nil }
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    AccountMenu(viewModel: authViewModel)
                 }
             }
             .sheet(isPresented: $showAddStore) {
@@ -228,6 +238,43 @@ private struct InfoChip: View {
         .padding(.vertical, 6)
         .padding(.horizontal, 10)
         .background(.regularMaterial, in: Capsule())
+    }
+}
+
+private struct SyncStatusView: View {
+    let text: String
+    let systemImage: String
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Image(systemName: systemImage)
+            Text(text)
+                .font(.caption)
+        }
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+    }
+}
+
+private struct AccountMenu: View {
+    @ObservedObject var viewModel: AuthViewModel
+
+    var body: some View {
+        Menu {
+            if let email = viewModel.userEmail {
+                Text(email)
+            }
+            Button(role: .destructive) {
+                Task { await viewModel.signOut() }
+            } label: {
+                Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
+            }
+        } label: {
+            Image(systemName: "person.crop.circle")
+        }
     }
 }
 

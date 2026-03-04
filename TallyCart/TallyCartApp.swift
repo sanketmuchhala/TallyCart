@@ -1,17 +1,13 @@
-//
-//  TallyCartApp.swift
-//  TallyCart
-//
-//  Created by Sanket Muchhala on 3/4/26.
-//
-
 import SwiftUI
 
 @main
 struct TallyCartApp: App {
+    @StateObject private var appViewModel = AppViewModel()
+    @StateObject private var authViewModel = AuthViewModel()
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            AuthGateView(appViewModel: appViewModel, authViewModel: authViewModel)
         }
     }
 }

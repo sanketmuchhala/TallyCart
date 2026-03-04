@@ -2,6 +2,7 @@ import SwiftUI
 
 struct HistoryView: View {
     @ObservedObject var viewModel: AppViewModel
+    @ObservedObject var authViewModel: AuthViewModel
     @State private var selectedTab: HistoryTab = .history
 
     var body: some View {
@@ -22,6 +23,11 @@ struct HistoryView: View {
                 }
             }
             .navigationTitle("History")
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    AccountMenu(viewModel: authViewModel)
+                }
+            }
         }
     }
 
@@ -48,6 +54,25 @@ struct HistoryView: View {
 private enum HistoryTab {
     case history
     case insights
+}
+
+private struct AccountMenu: View {
+    @ObservedObject var viewModel: AuthViewModel
+
+    var body: some View {
+        Menu {
+            if let email = viewModel.userEmail {
+                Text(email)
+            }
+            Button(role: .destructive) {
+                Task { await viewModel.signOut() }
+            } label: {
+                Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
+            }
+        } label: {
+            Image(systemName: "person.crop.circle")
+        }
+    }
 }
 
 private struct TripRow: View {
