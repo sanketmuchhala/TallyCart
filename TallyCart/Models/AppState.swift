@@ -1,6 +1,6 @@
 import Foundation
 
-struct AppState: Codable, Equatable {
+struct AppState: Codable, Equatable, Sendable {
     var currentCart: CartState
     var stores: [StoreLocation]
     var trips: [Trip]

@@ -1,6 +1,6 @@
 import Foundation
 
-struct Trip: Identifiable, Codable, Equatable {
+struct Trip: Identifiable, Codable, Equatable, Sendable {
     let id: UUID
     let storeId: UUID
     let storeNameSnapshot: String

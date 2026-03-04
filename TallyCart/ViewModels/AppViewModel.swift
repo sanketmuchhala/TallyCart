@@ -10,19 +10,23 @@ final class AppViewModel: ObservableObject {
     }
 
     @Published var currentTripStartedAt: Date
+    @Published var isLoading: Bool = true
 
     private var persistTask: Task<Void, Never>?
 
     init() {
         state = .empty
         currentTripStartedAt = Date()
-        Task { @MainActor in
-            let loaded = Self.loadState()
-            state = loaded
-            if !loaded.currentCart.items.isEmpty {
-                currentTripStartedAt = Date()
+        Task.detached(priority: .utility) {
+            let loaded = await Self.loadStateAsync()
+            await MainActor.run {
+                self.state = loaded
+                if !loaded.currentCart.items.isEmpty {
+                    self.currentTripStartedAt = Date()
+                }
+                self.isLoading = false
+                self.schedulePersist()
             }
-            schedulePersist()
         }
     }
 
@@ -168,32 +172,22 @@ final class AppViewModel: ObservableObject {
         persistTask?.cancel()
         persistTask = Task { [state] in
             try? await Task.sleep(nanoseconds: 300_000_000)
-            Self.persist(state: state)
+            AppStateStore.persist(state)
         }
     }
 
-    private static func persist(state: AppState) {
-        do {
-            let data = try JSONEncoder().encode(state)
-            UserDefaults.standard.set(data, forKey: storageKey)
-        } catch {
-            UserDefaults.standard.removeObject(forKey: storageKey)
+
+    private static func loadStateAsync() async -> AppState {
+        await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .utility).async {
+                continuation.resume(returning: AppStateStore.load())
+            }
         }
     }
 
-    private static func loadState() -> AppState {
-        guard let data = UserDefaults.standard.data(forKey: storageKey) else { return .empty }
-        do {
-            return try JSONDecoder().decode(AppState.self, from: data)
-        } catch {
-            UserDefaults.standard.removeObject(forKey: storageKey)
-            return .empty
-        }
-    }
-
-    private static let storageKey = "tallycart_app_state"
     private static let symbols = ["cart", "tag", "cart.fill", "bag", "creditcard", "basket", "shippingbox"]
 }
+
 
 struct StorePalette {
     static let keys = ["blue", "indigo", "purple", "pink", "red", "orange", "yellow", "green", "mint", "teal"]

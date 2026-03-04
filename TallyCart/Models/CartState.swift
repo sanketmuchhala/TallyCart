@@ -1,6 +1,6 @@
 import Foundation
 
-struct CartState: Codable, Equatable {
+struct CartState: Codable, Equatable, Sendable {
     var items: [CartItem]
     var includeTax: Bool
     var taxRate: Double

@@ -1,6 +1,6 @@
 import Foundation
 
-struct CartItem: Identifiable, Codable, Equatable {
+struct CartItem: Identifiable, Codable, Equatable, Sendable {
     let id: UUID
     var name: String
     var unitPrice: Double
