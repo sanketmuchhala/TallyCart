@@ -6,7 +6,7 @@ struct ContentView: View {
     var body: some View {
         Group {
             if viewModel.isLoading {
-                LaunchLoadingView()
+                SplashView()
             } else {
                 TabView {
                     CartView(viewModel: viewModel)
@@ -27,28 +27,29 @@ struct ContentView: View {
 #Preview {
     ContentView()
 }
-private struct LaunchLoadingView: View {
+// Match the static launch screen and provide a smooth handoff with a subtle animation.
+private struct SplashView: View {
     @State private var animate = false
 
     var body: some View {
         ZStack {
-            Color.black.ignoresSafeArea()
+            Color("BrandBackground").ignoresSafeArea()
             VStack(spacing: 16) {
-                Image("AppLogo")
+                Image("LogoMark")
                     .resizable()
                     .scaledToFit()
                     .frame(width: 140, height: 140)
-                    .scaleEffect(animate ? 1.0 : 0.9)
-                    .opacity(animate ? 1.0 : 0.6)
+                    .scaleEffect(animate ? 1.0 : 0.92)
+                    .opacity(animate ? 1.0 : 0.7)
                 Text("TallyCart")
                     .font(.headline.weight(.semibold))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(Color("BrandForeground"))
                 ProgressView()
-                    .tint(.white)
+                    .tint(Color("BrandAccent"))
             }
         }
         .onAppear {
-            withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
+            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
                 animate = true
             }
         }
