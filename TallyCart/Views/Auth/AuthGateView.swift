@@ -4,10 +4,13 @@ struct AuthGateView: View {
     @ObservedObject var appViewModel: AppViewModel
     @ObservedObject var authViewModel: AuthViewModel
     @State private var didSync = false
+    @State private var showSplash = true
 
     var body: some View {
         Group {
-            if let error = authViewModel.configurationError {
+            if showSplash {
+                SplashView()
+            } else if let error = authViewModel.configurationError {
                 ConfigErrorView(error: error)
             } else if authViewModel.isAuthenticated || authViewModel.isOfflineMode {
                 ContentView(viewModel: appViewModel, authViewModel: authViewModel)
@@ -17,6 +20,10 @@ struct AuthGateView: View {
             } else {
                 SignInView(viewModel: authViewModel)
             }
+        }
+        .task {
+            try? await Task.sleep(nanoseconds: 600_000_000)
+            showSplash = false
         }
         .onOpenURL { url in
             authViewModel.handleOpenURL(url)

@@ -5,22 +5,26 @@ struct ContentView: View {
     @ObservedObject var authViewModel: AuthViewModel
 
     var body: some View {
-        Group {
-            if viewModel.isLoading {
-                SplashView()
-            } else {
-                TabView {
-                    CartView(viewModel: viewModel, authViewModel: authViewModel)
-                        .tabItem {
-                            Label("Cart", systemImage: "cart")
-                        }
-
-                    HistoryView(viewModel: viewModel, authViewModel: authViewModel)
-                        .tabItem {
-                            Label("History", systemImage: "clock")
-                        }
+        TabView {
+            DashboardRootView(viewModel: viewModel)
+                .tabItem {
+                    Label("Dashboard", systemImage: "chart.bar.xaxis")
                 }
-            }
+
+            TripsRootView(viewModel: viewModel, authViewModel: authViewModel)
+                .tabItem {
+                    Label("Trips", systemImage: "clock")
+                }
+
+            ListsPlaceholderView()
+                .tabItem {
+                    Label("Lists", systemImage: "checklist")
+                }
+
+            StoresPlaceholderView()
+                .tabItem {
+                    Label("Stores", systemImage: "building.2")
+                }
         }
     }
 }
@@ -29,32 +33,73 @@ struct ContentView: View {
     ContentView(viewModel: AppViewModel(), authViewModel: AuthViewModel())
 }
 
-// Match the static launch screen and provide a smooth handoff with a subtle animation.
-private struct SplashView: View {
-    @State private var animate = false
+private struct TripsRootView: View {
+    @ObservedObject var viewModel: AppViewModel
+    @ObservedObject var authViewModel: AuthViewModel
+    @State private var selectedMode: TripsMode = .current
 
     var body: some View {
-        ZStack {
-            Color("BrandBackground").ignoresSafeArea()
-            VStack(spacing: 16) {
-                Image("LogoMark")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 140, height: 140)
-                    .scaleEffect(animate ? 1.0 : 0.92)
-                    .opacity(animate ? 1.0 : 0.7)
-                Text("TallyCart")
-                    .font(.headline.weight(.semibold))
-                    .foregroundStyle(Color("BrandForeground"))
-                ProgressView()
-                    .tint(Color("BrandAccent"))
+        VStack(spacing: Tokens.Spacing.m) {
+            Picker("Trips", selection: $selectedMode) {
+                Text("Current").tag(TripsMode.current)
+                Text("History").tag(TripsMode.history)
+            }
+            .pickerStyle(.segmented)
+            .padding(.horizontal, Tokens.Spacing.l)
+            .padding(.top, Tokens.Spacing.s)
+
+            if selectedMode == .current {
+                CartView(viewModel: viewModel, authViewModel: authViewModel)
+            } else {
+                HistoryView(viewModel: viewModel, authViewModel: authViewModel)
             }
         }
-        .onAppear {
-            withAnimation(.easeInOut(duration: 0.9).repeatForever(autoreverses: true)) {
-                animate = true
+    }
+}
+
+private enum TripsMode {
+    case current
+    case history
+}
+
+private struct DashboardRootView: View {
+    @ObservedObject var viewModel: AppViewModel
+
+    var body: some View {
+        NavigationStack {
+            if viewModel.state.trips.isEmpty {
+                EmptyStateView(
+                    systemImage: "chart.bar.xaxis",
+                    title: "Dashboard",
+                    subtitle: "Monthly insights will appear here."
+                )
+                .padding(Tokens.Spacing.l)
+            } else {
+                InsightsView(viewModel: viewModel)
             }
         }
+    }
+}
+
+private struct ListsPlaceholderView: View {
+    var body: some View {
+        EmptyStateView(
+            systemImage: "checklist",
+            title: "Lists",
+            subtitle: "Store lists will appear here."
+        )
+        .padding(Tokens.Spacing.l)
+    }
+}
+
+private struct StoresPlaceholderView: View {
+    var body: some View {
+        EmptyStateView(
+            systemImage: "building.2",
+            title: "Stores",
+            subtitle: "Store summaries will appear here."
+        )
+        .padding(Tokens.Spacing.l)
     }
 }
 

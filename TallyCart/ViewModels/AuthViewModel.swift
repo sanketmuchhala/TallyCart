@@ -65,10 +65,13 @@ final class AuthViewModel: ObservableObject {
         guard let authService else { return }
         isLoading = true
         errorMessage = nil
+        print("[Auth] Sign-in button tapped")
         do {
             let session = try await authService.signInWithGoogle(presentationAnchor: presentationAnchor)
+            print("[Auth] Sign-in completed for user \(session.user.id)")
             self.session = session
         } catch {
+            print("[Auth] Sign-in failed: \(error.localizedDescription)")
             errorMessage = "Sign in failed. Please try again."
         }
         isLoading = false

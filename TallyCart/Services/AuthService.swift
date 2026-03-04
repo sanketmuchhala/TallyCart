@@ -20,24 +20,31 @@ final class AuthService: NSObject {
         self.presentationAnchor = presentationAnchor
         let redirectURL = URL(string: "\(SupabaseClientProvider.callbackScheme)://login-callback")!
         let url = try client.auth.getOAuthSignInURL(provider: .google, redirectTo: redirectURL)
+        let startTime = Date()
+        print("[Auth] Starting Google OAuth")
         return try await withCheckedThrowingContinuation { continuation in
             let session = ASWebAuthenticationSession(
                 url: url,
                 callbackURLScheme: SupabaseClientProvider.callbackScheme
             ) { callbackURL, error in
                 if let error {
+                    print("[Auth] OAuth failed after \(Date().timeIntervalSince(startTime))s: \(error.localizedDescription)")
                     continuation.resume(throwing: error)
                     return
                 }
                 guard let callbackURL else {
+                    print("[Auth] OAuth callback missing after \(Date().timeIntervalSince(startTime))s")
                     continuation.resume(throwing: URLError(.badURL))
                     return
                 }
+                print("[Auth] OAuth callback received after \(Date().timeIntervalSince(startTime))s")
                 Task {
                     do {
                         let session = try await self.client.auth.session(from: callbackURL)
+                        print("[Auth] Session exchange finished after \(Date().timeIntervalSince(startTime))s")
                         continuation.resume(returning: session)
                     } catch {
+                        print("[Auth] Session exchange failed after \(Date().timeIntervalSince(startTime))s: \(error.localizedDescription)")
                         continuation.resume(throwing: error)
                     }
                 }

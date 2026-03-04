@@ -6,15 +6,15 @@ struct TripDetailView: View {
 
     var body: some View {
         ScrollView {
-            VStack(spacing: 16) {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack(alignment: .top, spacing: 8) {
-                        VStack(alignment: .leading, spacing: 6) {
+            VStack(spacing: Tokens.Spacing.l) {
+                CardContainer {
+                    HStack(alignment: .top, spacing: Tokens.Spacing.s) {
+                        VStack(alignment: .leading, spacing: Tokens.Spacing.xs) {
                             Text(trip.storeNameSnapshot)
                                 .font(.title3.weight(.semibold))
                             Text(trip.finishedAt.formatted(date: .abbreviated, time: .shortened))
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(Tokens.ColorToken.secondaryLabel)
                         }
                         Spacer()
                         StatusPill(status: trip.status)
@@ -23,83 +23,49 @@ struct TripDetailView: View {
                     if trip.status == .finished {
                         Text("Finished trips are immutable. Create a draft copy to make changes.")
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(Tokens.ColorToken.secondaryLabel)
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(16)
-                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
 
                 if trip.status == .finished {
-                    Button("Start Draft Copy") {
+                    PrimaryButton("Start Draft Copy") {
                         viewModel.startDraft(from: trip)
                     }
-                    .buttonStyle(.bordered)
+                    .accessibilityLabel(Text("Start draft copy"))
                 }
 
-                VStack(alignment: .leading, spacing: 12) {
-                    SummaryRow(title: "Subtotal", value: trip.subtotal.currencyString)
+                CardContainer {
+                    MetricRow(label: "Subtotal", value: trip.subtotal.currencyString)
                     if trip.includeTax {
-                        SummaryRow(title: "Tax", value: trip.taxAmount.currencyString)
+                        MetricRow(label: "Tax", value: trip.taxAmount.currencyString)
                     }
-                    SummaryRow(title: "Total", value: trip.total.currencyString, bold: true)
+                    MetricRow(label: "Total", value: trip.total.currencyString)
                 }
-                .padding(16)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
 
-                VStack(alignment: .leading, spacing: 12) {
+                CardContainer {
                     Text("Items")
                         .font(.headline)
                     ForEach(trip.items) { item in
                         HStack {
-                            VStack(alignment: .leading, spacing: 4) {
+                            VStack(alignment: .leading, spacing: Tokens.Spacing.xs) {
                                 Text(item.displayName)
                                     .font(.subheadline.weight(.semibold))
                                 Text("\(item.quantity) x \(item.unitPrice.currencyString)")
                                     .font(.caption)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(Tokens.ColorToken.secondaryLabel)
                             }
                             Spacer()
                             Text(item.lineTotal.currencyString)
                                 .font(.subheadline.weight(.semibold))
                         }
-                        .padding(12)
-                        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+                        .padding(Tokens.Spacing.m)
+                        .background(Tokens.ColorToken.secondaryBackground, in: RoundedRectangle(cornerRadius: Tokens.CornerRadius.card, style: .continuous))
                     }
                 }
             }
-            .padding(16)
+            .padding(Tokens.Spacing.l)
         }
         .navigationTitle("Trip")
         .navigationBarTitleDisplayMode(.inline)
-    }
-}
-
-private struct SummaryRow: View {
-    let title: String
-    let value: String
-    var bold: Bool = false
-
-    var body: some View {
-        HStack {
-            Text(title)
-                .foregroundStyle(.secondary)
-            Spacer()
-            Text(value)
-                .font(bold ? .headline : .subheadline.weight(.semibold))
-        }
-    }
-}
-
-private struct StatusPill: View {
-    let status: TripStatus
-
-    var body: some View {
-        Text(status.displayName)
-            .font(.caption2.weight(.semibold))
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
-            .background(.ultraThinMaterial, in: Capsule())
-            .foregroundStyle(.secondary)
     }
 }

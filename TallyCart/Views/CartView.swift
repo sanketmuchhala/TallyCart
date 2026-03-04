@@ -32,12 +32,6 @@ struct CartView: View {
                         includeTax: viewModel.state.currentCart.includeTax
                     )
 
-                    if viewModel.isSyncing {
-                        SyncStatusView(text: "Syncing", systemImage: "arrow.triangle.2.circlepath")
-                    } else if let message = viewModel.syncErrorMessage {
-                        SyncStatusView(text: message, systemImage: "icloud.slash")
-                    }
-
                     StorePickerView(
                         stores: viewModel.state.stores,
                         selectedStoreId: viewModel.state.selectedStoreId,

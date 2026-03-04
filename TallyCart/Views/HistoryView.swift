@@ -3,26 +3,22 @@ import SwiftUI
 struct HistoryView: View {
     @ObservedObject var viewModel: AppViewModel
     @ObservedObject var authViewModel: AuthViewModel
-    @State private var selectedTab: HistoryTab = .history
-
     var body: some View {
         NavigationStack {
-            VStack(spacing: 12) {
-                Picker("History", selection: $selectedTab) {
-                    Text("History").tag(HistoryTab.history)
-                    Text("Insights").tag(HistoryTab.insights)
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal, 16)
-                .padding(.top, 8)
-
-                if selectedTab == .history {
-                    historyList
+            VStack(spacing: Tokens.Spacing.m) {
+                if viewModel.isLoading {
+                    LoadingStateView(title: "Loading trips")
+                } else if viewModel.state.trips.isEmpty {
+                    EmptyStateView(
+                        systemImage: "clock",
+                        title: "No trips yet",
+                        subtitle: "Finished trips will appear here."
+                    )
                 } else {
-                    InsightsView(viewModel: viewModel)
+                    historyList
                 }
             }
-            .navigationTitle("History")
+            .navigationTitle("Trips")
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
                     AccountMenu(viewModel: authViewModel)
@@ -41,6 +37,7 @@ struct HistoryView: View {
                         } label: {
                             TripRow(trip: trip)
                         }
+                        .standardListRowStyle()
                     }
                 } header: {
                     Text(group.month.formatted(.dateTime.year().month()))
@@ -49,11 +46,6 @@ struct HistoryView: View {
         }
         .listStyle(.insetGrouped)
     }
-}
-
-private enum HistoryTab {
-    case history
-    case insights
 }
 
 private struct AccountMenu: View {
@@ -72,6 +64,7 @@ private struct AccountMenu: View {
         } label: {
             ProfileImageView(url: viewModel.avatarURL)
         }
+        .accessibilityLabel(Text("Account"))
     }
 }
 
@@ -96,6 +89,7 @@ private struct ProfileImageView: View {
         .frame(width: 28, height: 28)
         .clipShape(Circle())
         .overlay(Circle().stroke(Color.primary.opacity(0.1), lineWidth: 1))
+        .accessibilityHidden(true)
     }
 }
 
@@ -103,12 +97,13 @@ private struct TripRow: View {
     let trip: Trip
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: Tokens.Spacing.m) {
             Circle()
                 .fill(StorePalette.color(for: trip.storeColorKeySnapshot).opacity(0.2))
                 .frame(width: 10, height: 10)
-            VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) {
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: Tokens.Spacing.xs) {
+                HStack(spacing: Tokens.Spacing.s) {
                     Text(trip.storeNameSnapshot)
                         .font(.subheadline.weight(.semibold))
                     if trip.status != .finished {
@@ -117,25 +112,14 @@ private struct TripRow: View {
                 }
                 Text(trip.finishedAt.formatted(date: .abbreviated, time: .shortened))
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(Tokens.ColorToken.secondaryLabel)
             }
             Spacer()
             Text(trip.total.currencyString)
                 .font(.subheadline.weight(.semibold))
         }
-        .padding(.vertical, 6)
-    }
-}
-
-private struct StatusPill: View {
-    let status: TripStatus
-
-    var body: some View {
-        Text(status.displayName)
-            .font(.caption2.weight(.semibold))
-            .padding(.horizontal, 6)
-            .padding(.vertical, 2)
-            .background(.ultraThinMaterial, in: Capsule())
-            .foregroundStyle(.secondary)
+        .padding(.vertical, Tokens.Spacing.s)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(Text("\(trip.storeNameSnapshot), \(trip.total.currencyString)"))
     }
 }
