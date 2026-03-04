@@ -17,6 +17,10 @@ This file contains local setup details and secrets for Supabase. It is intention
    - iOS deep link: `tallycart://login-callback`
 4. In Supabase Auth → URL Configuration, add `tallycart://login-callback` to Additional Redirect URLs.
 
+## Location Permissions
+Add the following to `TallyCart/Info.plist`:
+- `NSLocationWhenInUseUsageDescription`: "We use your location to better understand your spending, nearby stores, and trip context."
+
 ## Database Schema
 Run the SQL block provided in the main implementation notes to create:
 - `stores`

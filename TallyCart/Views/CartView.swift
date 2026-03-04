@@ -264,17 +264,41 @@ private struct AccountMenu: View {
 
     var body: some View {
         Menu {
-            if let email = viewModel.userEmail {
-                Text(email)
-            }
+            Text(viewModel.displayName)
+                .font(.headline)
+            Button("Profile") {}
             Button(role: .destructive) {
                 Task { await viewModel.signOut() }
             } label: {
                 Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
             }
         } label: {
-            Image(systemName: "person.crop.circle")
+            ProfileImageView(url: viewModel.avatarURL)
         }
+    }
+}
+
+private struct ProfileImageView: View {
+    let url: URL?
+
+    var body: some View {
+        Group {
+            if let url {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image.resizable().scaledToFill()
+                    default:
+                        Image(systemName: "person.crop.circle.fill")
+                    }
+                }
+            } else {
+                Image(systemName: "person.crop.circle.fill")
+            }
+        }
+        .frame(width: 28, height: 28)
+        .clipShape(Circle())
+        .overlay(Circle().stroke(Color.primary.opacity(0.1), lineWidth: 1))
     }
 }
 

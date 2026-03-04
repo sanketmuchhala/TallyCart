@@ -33,6 +33,21 @@ final class AuthViewModel: ObservableObject {
         session?.user.email
     }
 
+    var displayName: String {
+        if let name = metadataString(for: "full_name") ?? metadataString(for: "name") {
+            return name
+        }
+        return "Profile"
+    }
+
+    var avatarURL: URL? {
+        if let value = metadataString(for: "avatar_url") ?? metadataString(for: "picture"),
+           let url = URL(string: value) {
+            return url
+        }
+        return nil
+    }
+
     var userId: UUID? {
         session?.user.id
     }
@@ -95,5 +110,17 @@ final class AuthViewModel: ObservableObject {
 
     func enableOfflineMode() {
         isOfflineMode = true
+    }
+
+    private func metadataString(for key: String) -> String? {
+        guard let metadata = session?.user.userMetadata else { return nil }
+        guard let value = metadata[key] else { return nil }
+        let raw = String(describing: value)
+        if raw.hasPrefix("string(\"") && raw.hasSuffix("\")") {
+            return raw
+                .replacingOccurrences(of: "string(\"", with: "")
+                .replacingOccurrences(of: "\")", with: "")
+        }
+        return raw
     }
 }
