@@ -28,18 +28,28 @@ struct ContentView: View {
     ContentView()
 }
 private struct LaunchLoadingView: View {
+    @State private var animate = false
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
-            VStack(spacing: 12) {
-                Image(systemName: "cart.fill")
-                    .font(.system(size: 36, weight: .semibold))
-                    .foregroundStyle(.white)
+            VStack(spacing: 16) {
+                Image("AppLogo")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 140, height: 140)
+                    .scaleEffect(animate ? 1.0 : 0.9)
+                    .opacity(animate ? 1.0 : 0.6)
                 Text("TallyCart")
                     .font(.headline.weight(.semibold))
                     .foregroundStyle(.white)
                 ProgressView()
                     .tint(.white)
+            }
+        }
+        .onAppear {
+            withAnimation(.easeInOut(duration: 1.0).repeatForever(autoreverses: true)) {
+                animate = true
             }
         }
     }
