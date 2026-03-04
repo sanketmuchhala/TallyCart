@@ -2,20 +2,40 @@ import SwiftUI
 
 struct TripDetailView: View {
     let trip: Trip
+    @ObservedObject var viewModel: AppViewModel
 
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(trip.storeNameSnapshot)
-                        .font(.title3.weight(.semibold))
-                    Text(trip.finishedAt.formatted(date: .abbreviated, time: .shortened))
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .top, spacing: 8) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text(trip.storeNameSnapshot)
+                                .font(.title3.weight(.semibold))
+                            Text(trip.finishedAt.formatted(date: .abbreviated, time: .shortened))
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        StatusPill(status: trip.status)
+                    }
+
+                    if trip.status == .finished {
+                        Text("Finished trips are immutable. Create a draft copy to make changes.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .padding(16)
                 .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+
+                if trip.status == .finished {
+                    Button("Start Draft Copy") {
+                        viewModel.startDraft(from: trip)
+                    }
+                    .buttonStyle(.bordered)
+                }
 
                 VStack(alignment: .leading, spacing: 12) {
                     SummaryRow(title: "Subtotal", value: trip.subtotal.currencyString)
@@ -68,5 +88,18 @@ private struct SummaryRow: View {
             Text(value)
                 .font(bold ? .headline : .subheadline.weight(.semibold))
         }
+    }
+}
+
+private struct StatusPill: View {
+    let status: TripStatus
+
+    var body: some View {
+        Text(status.displayName)
+            .font(.caption2.weight(.semibold))
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(.ultraThinMaterial, in: Capsule())
+            .foregroundStyle(.secondary)
     }
 }

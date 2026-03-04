@@ -37,7 +37,7 @@ struct HistoryView: View {
                 Section {
                     ForEach(group.trips) { trip in
                         NavigationLink {
-                            TripDetailView(trip: trip)
+                            TripDetailView(trip: trip, viewModel: viewModel)
                         } label: {
                             TripRow(trip: trip)
                         }
@@ -108,8 +108,13 @@ private struct TripRow: View {
                 .fill(StorePalette.color(for: trip.storeColorKeySnapshot).opacity(0.2))
                 .frame(width: 10, height: 10)
             VStack(alignment: .leading, spacing: 4) {
-                Text(trip.storeNameSnapshot)
-                    .font(.subheadline.weight(.semibold))
+                HStack(spacing: 6) {
+                    Text(trip.storeNameSnapshot)
+                        .font(.subheadline.weight(.semibold))
+                    if trip.status != .finished {
+                        StatusPill(status: trip.status)
+                    }
+                }
                 Text(trip.finishedAt.formatted(date: .abbreviated, time: .shortened))
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -119,5 +124,18 @@ private struct TripRow: View {
                 .font(.subheadline.weight(.semibold))
         }
         .padding(.vertical, 6)
+    }
+}
+
+private struct StatusPill: View {
+    let status: TripStatus
+
+    var body: some View {
+        Text(status.displayName)
+            .font(.caption2.weight(.semibold))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(.ultraThinMaterial, in: Capsule())
+            .foregroundStyle(.secondary)
     }
 }

@@ -145,7 +145,8 @@ final class AppViewModel: ObservableObject {
             taxRate: state.currentCart.taxRate,
             subtotal: subtotal,
             taxAmount: taxAmount,
-            total: total
+            total: total,
+            status: .finished
         )
         state.trips.insert(trip, at: 0)
         markTripPending(trip.id)
@@ -288,6 +289,13 @@ final class AppViewModel: ObservableObject {
         let localOnly = state.trips.filter { !remoteIds.contains($0.id) }
         state.trips = (remoteTrips + localOnly).sorted(by: { $0.finishedAt > $1.finishedAt })
         state.pendingTripIds.removeAll { remoteIds.contains($0) }
+    }
+
+    func startDraft(from trip: Trip) {
+        guard let store = state.stores.first(where: { $0.id == trip.storeId }) else { return }
+        state.selectedStoreId = store.id
+        state.currentCart = CartState(items: trip.items, includeTax: trip.includeTax, taxRate: trip.taxRate)
+        currentTripStartedAt = Date()
     }
 
     private func markTripPending(_ tripId: UUID) {

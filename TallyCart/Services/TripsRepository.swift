@@ -101,6 +101,7 @@ private struct TripRow: Codable {
     let subtotal: Double
     let taxAmount: Double
     let total: Double
+    let status: String?
 
     init(trip: Trip, userId: UUID) {
         id = trip.id
@@ -115,6 +116,7 @@ private struct TripRow: Codable {
         subtotal = trip.subtotal
         taxAmount = trip.taxAmount
         total = trip.total
+        status = trip.status.rawValue
     }
 
     func toTrip(items: [CartItem]) -> Trip {
@@ -130,7 +132,8 @@ private struct TripRow: Codable {
             taxRate: taxRate,
             subtotal: subtotal,
             taxAmount: taxAmount,
-            total: total
+            total: total,
+            status: TripStatus(rawValue: status ?? "finished") ?? .finished
         )
     }
 
@@ -147,6 +150,7 @@ private struct TripRow: Codable {
         case subtotal
         case taxAmount = "tax_amount"
         case total
+        case status
     }
 }
 
