@@ -1,6 +1,6 @@
 # TallyCart
 
-Screenshots: ![Home](Screenshots/home.svg) ![Review](Screenshots/review.svg) ![Trip Detail](Screenshots/trip-detail.svg)
+Screenshots: ![Home](Screenshots/IMG_6553.jpeg) ![Review](Screenshots/IMG_6554.jpeg) ![Trip Detail](Screenshots/IMG_6552.jpeg)
 
 A polished, single-screen iOS app for tracking a shopping trip with subtotal, tax, and total in real time. The experience is designed to feel like a finished product: clear hierarchy, bold materials, and smooth flows for adding items, reviewing a trip, and revisiting history.
 
