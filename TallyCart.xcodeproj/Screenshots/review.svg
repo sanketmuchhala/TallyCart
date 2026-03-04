@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800">
+  <rect width="1200" height="800" fill="#000000"/>
+  <rect x="80" y="80" width="1040" height="640" rx="48" fill="#111111" stroke="#222222" stroke-width="4"/>
+  <text x="140" y="200" fill="#FFFFFF" font-size="48" font-family="-apple-system, Helvetica, Arial, sans-serif">TallyCart — Review</text>
+  <text x="140" y="270" fill="#9AA0A6" font-size="24" font-family="-apple-system, Helvetica, Arial, sans-serif">Screenshot placeholder</text>
+</svg>

@@ -1,6 +1,15 @@
 import SwiftUI
 import Combine
 import CoreLocation
+import MapKit
+
+struct AppPalette {
+    static let berry = Color(red: 0.86, green: 0.25, blue: 0.43)
+    static let sky = Color(red: 0.22, green: 0.62, blue: 1.0)
+    static let mint = Color(red: 0.23, green: 0.86, blue: 0.64)
+    static let peach = Color(red: 1.0, green: 0.55, blue: 0.38)
+    static let violet = Color(red: 0.62, green: 0.4, blue: 1.0)
+}
 
 struct CartItem: Identifiable, Codable, Equatable {
     let id: UUID
@@ -187,14 +196,15 @@ struct ContentView: View {
     @StateObject private var viewModel = CartViewModel()
     @StateObject private var locationProvider = LocationProvider()
 
+    @Environment(\.colorScheme) private var colorScheme
+
     @State private var itemName: String = ""
     @State private var priceText: String = ""
     @State private var quantity: Int = 1
     @State private var taxRateText: String = "5.3"
     @State private var showClearConfirm = false
-    @State private var showFinishConfirm = false
     @State private var activeSwipeItemID: UUID?
-    @State private var selectedTrip: TripSummary?
+    @State private var showReviewSheet = false
 
     @FocusState private var focusedField: FocusedField?
 
@@ -203,7 +213,8 @@ struct ContentView: View {
             ZStack {
                 backgroundLayer
                 ScrollView {
-                    VStack(spacing: 16) {
+                    VStack(spacing: 18) {
+                        SectionHeader(title: "Trip Summary", subtitle: "Live totals")
                         HeaderCard(
                             subtotal: viewModel.subtotal,
                             taxAmount: viewModel.taxAmount,
@@ -212,6 +223,14 @@ struct ContentView: View {
                         )
                         .animation(.spring(response: 0.4, dampingFraction: 0.8), value: viewModel.total)
 
+                        ActiveTripCard(
+                            date: Date(),
+                            itemCount: viewModel.state.items.count,
+                            includeTax: viewModel.state.includeTax,
+                            taxRate: viewModel.state.taxRate
+                        )
+
+                        SectionHeader(title: "Add Item", subtitle: "Name, price, and quantity")
                         AddItemCard(
                             itemName: $itemName,
                             priceText: $priceText,
@@ -219,6 +238,8 @@ struct ContentView: View {
                             includeTax: viewModel.state.includeTax,
                             taxRateText: $taxRateText,
                             focusedField: $focusedField,
+                            quickAddItems: quickAddItems,
+                            onQuickAdd: applyQuickAdd,
                             priceError: priceError,
                             addDisabled: !canAdd,
                             onToggleTax: { include in
@@ -230,6 +251,11 @@ struct ContentView: View {
                                 viewModel.updateTaxRate(newValue)
                             },
                             onAdd: addItem
+                        )
+
+                        SectionHeader(
+                            title: "Items",
+                            subtitle: viewModel.state.items.isEmpty ? "No items yet" : "\(viewModel.state.items.count) items"
                         )
 
                         if viewModel.state.items.isEmpty {
@@ -260,9 +286,8 @@ struct ContentView: View {
                         }
 
                         if !viewModel.tripHistory.isEmpty {
-                            TripHistorySection(trips: viewModel.tripHistory) { trip in
-                                selectedTrip = trip
-                            }
+                            SectionHeader(title: "Trip History", subtitle: "Past totals and locations")
+                            TripHistorySection(trips: viewModel.tripHistory)
                         }
                     }
                     .padding(.horizontal, 16)
@@ -285,29 +310,20 @@ struct ContentView: View {
                     canFinish: !viewModel.state.items.isEmpty,
                     canClear: !viewModel.state.items.isEmpty,
                     onFinishTrip: {
-                        showFinishConfirm = true
+                        showReviewSheet = true
                     },
                     onNewTrip: {
                         showClearConfirm = true
                     }
                 )
             }
-            .alert("Finish this trip?", isPresented: $showFinishConfirm) {
-                Button("Cancel", role: .cancel) {}
-                Button("Finish Trip") {
-                    triggerHaptics()
-                    Task {
-                        let resolved = await resolveLocation()
-                        await MainActor.run {
-                            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                                viewModel.finishTrip(locationName: resolved.name, location: resolved.location)
-                            }
-                            resetInputs()
-                        }
-                    }
-                }
-            } message: {
-                Text("We will store this trip in your history and clear the cart.")
+            .safeAreaInset(edge: .top) {
+                SummaryBar(
+                    total: viewModel.total,
+                    subtotal: viewModel.subtotal,
+                    includeTax: viewModel.state.includeTax,
+                    taxAmount: viewModel.taxAmount
+                )
             }
             .alert("Start a new trip?", isPresented: $showClearConfirm) {
                 Button("Cancel", role: .cancel) {}
@@ -329,23 +345,85 @@ struct ContentView: View {
                     taxRateText = formattedTaxRate(newValue)
                 }
             }
-            .fullScreenCover(item: $selectedTrip) { trip in
-                TripDetailView(trip: trip)
+            .sheet(isPresented: $showReviewSheet) {
+                TripReviewSheet(
+                    items: viewModel.state.items,
+                    subtotal: viewModel.subtotal,
+                    taxAmount: viewModel.taxAmount,
+                    total: viewModel.total,
+                    includeTax: viewModel.state.includeTax,
+                    taxRate: viewModel.state.taxRate,
+                    onCancel: {
+                        showReviewSheet = false
+                    },
+                    onConfirm: {
+                        triggerHaptics()
+                        showReviewSheet = false
+                        Task {
+                            let resolved = await resolveLocation()
+                            await MainActor.run {
+                                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                                    viewModel.finishTrip(locationName: resolved.name, location: resolved.location)
+                                }
+                                resetInputs()
+                            }
+                        }
+                    }
+                )
             }
         }
     }
 
     private var backgroundLayer: some View {
-        LinearGradient(
-            colors: [
-                Color.primary.opacity(0.04),
-                Color.primary.opacity(0.01),
-                Color.clear
-            ],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-        .ignoresSafeArea()
+        ZStack {
+            (colorScheme == .dark ? Color.black : Color(.systemGroupedBackground))
+                .ignoresSafeArea()
+
+            LinearGradient(
+                colors: [
+                    AppPalette.violet.opacity(colorScheme == .dark ? 0.35 : 0.25),
+                    AppPalette.sky.opacity(colorScheme == .dark ? 0.25 : 0.2),
+                    AppPalette.peach.opacity(colorScheme == .dark ? 0.18 : 0.16),
+                    Color.clear
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .blendMode(colorScheme == .dark ? .screen : .normal)
+            .ignoresSafeArea()
+
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            AppPalette.berry.opacity(colorScheme == .dark ? 0.4 : 0.18),
+                            Color.clear
+                        ],
+                        center: .center,
+                        startRadius: 20,
+                        endRadius: 240
+                    )
+                )
+                .frame(width: 300, height: 300)
+                .offset(x: 170, y: -190)
+                .blur(radius: 6)
+
+            Circle()
+                .fill(
+                    RadialGradient(
+                        colors: [
+                            AppPalette.mint.opacity(colorScheme == .dark ? 0.3 : 0.2),
+                            Color.clear
+                        ],
+                        center: .center,
+                        startRadius: 20,
+                        endRadius: 260
+                    )
+                )
+                .frame(width: 320, height: 320)
+                .offset(x: -170, y: 260)
+                .blur(radius: 10)
+        }
     }
 
     private var canAdd: Bool {
@@ -405,6 +483,22 @@ struct ContentView: View {
         generator.impactOccurred()
     }
 
+    private var quickAddItems: [QuickAddItem] {
+        [
+            QuickAddItem(title: "Milk", price: 3.79),
+            QuickAddItem(title: "Eggs", price: 4.29),
+            QuickAddItem(title: "Bread", price: 2.69),
+            QuickAddItem(title: "Coffee", price: 5.49)
+        ]
+    }
+
+    private func applyQuickAdd(_ item: QuickAddItem) {
+        itemName = item.title
+        priceText = String(format: "%.2f", item.price)
+        quantity = 1
+        focusedField = .price
+    }
+
     private func resolveLocation() async -> (name: String, location: CLLocation?) {
         if Bundle.main.object(forInfoDictionaryKey: "NSLocationWhenInUseUsageDescription") == nil {
             return ("Unknown (Demo)", nil)
@@ -452,9 +546,16 @@ struct HeaderCard: View {
                 Spacer()
                 Image(systemName: "cart.fill")
                     .font(.system(size: 28, weight: .semibold))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.white)
                     .padding(12)
-                    .background(.ultraThinMaterial, in: Circle())
+                    .background(
+                        LinearGradient(
+                            colors: [AppPalette.sky, AppPalette.violet],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        in: Circle()
+                    )
             }
 
             HStack(spacing: 10) {
@@ -466,7 +567,18 @@ struct HeaderCard: View {
         }
         .padding(20)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 28, style: .continuous))
-        .shadow(color: Color.primary.opacity(0.08), radius: 18, x: 0, y: 8)
+        .overlay(
+            RoundedRectangle(cornerRadius: 28, style: .continuous)
+                .stroke(
+                    LinearGradient(
+                        colors: [AppPalette.sky.opacity(0.6), AppPalette.violet.opacity(0.6), AppPalette.peach.opacity(0.6)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1.2
+                )
+        )
+        .shadow(color: Color.black.opacity(0.25), radius: 20, x: 0, y: 10)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Total \(total.currencyString)")
     }
@@ -495,6 +607,64 @@ struct InfoChip: View {
     }
 }
 
+struct ActiveTripCard: View {
+    let date: Date
+    let itemCount: Int
+    let includeTax: Bool
+    let taxRate: Double
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Image(systemName: "calendar")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(.white)
+                .padding(10)
+                .background(
+                    LinearGradient(
+                        colors: [AppPalette.mint, AppPalette.sky],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    in: Circle()
+                )
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Active Trip")
+                    .font(.headline)
+                    .foregroundStyle(.primary)
+                Text(date.formatted(date: .abbreviated, time: .omitted))
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
+            Spacer()
+
+            VStack(alignment: .trailing, spacing: 4) {
+                Text("\(itemCount) items")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                Text(includeTax ? "Tax \(taxRate.formattedNumber)%" : "Tax off")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(16)
+        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .stroke(
+                    LinearGradient(
+                        colors: [AppPalette.mint.opacity(0.6), AppPalette.sky.opacity(0.6)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
+        )
+        .shadow(color: Color.black.opacity(0.25), radius: 12, x: 0, y: 8)
+    }
+}
+
 struct AddItemCard: View {
     @Binding var itemName: String
     @Binding var priceText: String
@@ -502,6 +672,8 @@ struct AddItemCard: View {
     var includeTax: Bool
     @Binding var taxRateText: String
     var focusedField: FocusState<FocusedField?>.Binding
+    let quickAddItems: [QuickAddItem]
+    let onQuickAdd: (QuickAddItem) -> Void
     var priceError: String?
     var addDisabled: Bool
     var onToggleTax: (Bool) -> Void
@@ -510,11 +682,11 @@ struct AddItemCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("Add Item")
-                .font(.title3.weight(.semibold))
-                .foregroundStyle(.primary)
-
             VStack(spacing: 12) {
+                if !quickAddItems.isEmpty {
+                    QuickAddRow(items: quickAddItems, onSelect: onQuickAdd)
+                }
+
                 TextField("Item name (optional)", text: $itemName)
                     .textInputAutocapitalization(.words)
                     .submitLabel(.next)
@@ -584,7 +756,18 @@ struct AddItemCard: View {
         }
         .padding(20)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .shadow(color: Color.primary.opacity(0.06), radius: 14, x: 0, y: 6)
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(
+                    LinearGradient(
+                        colors: [AppPalette.berry.opacity(0.6), AppPalette.peach.opacity(0.6)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
+        )
+        .shadow(color: Color.black.opacity(0.25), radius: 14, x: 0, y: 6)
     }
 
     private var priceField: some View {
@@ -616,6 +799,187 @@ struct AddItemCard: View {
     }
 }
 
+struct SectionHeader: View {
+    let title: String
+    let subtitle: String
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title)
+                .font(.title3.weight(.semibold))
+                .foregroundStyle(.primary)
+            Spacer()
+            Text(subtitle)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .padding(.horizontal, 4)
+    }
+}
+
+struct QuickAddItem: Identifiable, Equatable {
+    let id = UUID()
+    let title: String
+    let price: Double
+}
+
+struct QuickAddRow: View {
+    let items: [QuickAddItem]
+    let onSelect: (QuickAddItem) -> Void
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 10) {
+                ForEach(items) { item in
+                    Button {
+                        onSelect(item)
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.caption)
+                            Text(item.title)
+                                .font(.subheadline.weight(.semibold))
+                            Text(item.price.currencyString)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+                        .padding(.vertical, 8)
+                        .padding(.horizontal, 12)
+                        .background(
+                            LinearGradient(
+                                colors: [AppPalette.sky.opacity(0.35), AppPalette.violet.opacity(0.35)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            in: Capsule()
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 2)
+        }
+    }
+}
+
+struct SummaryBar: View {
+    let total: Double
+    let subtotal: Double
+    let includeTax: Bool
+    let taxAmount: Double
+
+    var body: some View {
+        HStack(spacing: 12) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Total")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(total.currencyString)
+                    .font(.headline.weight(.semibold))
+                    .foregroundStyle(.primary)
+            }
+            Spacer()
+            VStack(alignment: .trailing, spacing: 2) {
+                Text("Subtotal")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Text(subtotal.currencyString)
+                    .font(.subheadline.weight(.semibold))
+            }
+            if includeTax {
+                VStack(alignment: .trailing, spacing: 2) {
+                    Text("Tax")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Text(taxAmount.currencyString)
+                        .font(.subheadline.weight(.semibold))
+                }
+            }
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 16)
+        .background(
+            LinearGradient(
+                colors: [AppPalette.violet.opacity(0.35), AppPalette.berry.opacity(0.35)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ),
+            in: Capsule()
+        )
+        .overlay(
+            Capsule()
+                .stroke(Color.white.opacity(0.18), lineWidth: 1)
+        )
+        .padding(.horizontal, 16)
+        .padding(.top, 6)
+        .padding(.bottom, 8)
+        .shadow(color: Color.black.opacity(0.3), radius: 12, x: 0, y: 6)
+    }
+}
+
+struct TripReviewSheet: View {
+    let items: [CartItem]
+    let subtotal: Double
+    let taxAmount: Double
+    let total: Double
+    let includeTax: Bool
+    let taxRate: Double
+    let onCancel: () -> Void
+    let onConfirm: () -> Void
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 16) {
+                    HeaderCard(
+                        subtotal: subtotal,
+                        taxAmount: taxAmount,
+                        total: total,
+                        includeTax: includeTax
+                    )
+
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("Review")
+                            .font(.title3.weight(.semibold))
+                            .foregroundStyle(.primary)
+                        Text("\(items.count) items • Tax \(includeTax ? "\(taxRate.formattedNumber)%" : "Off")")
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(16)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                    .shadow(color: Color.primary.opacity(0.05), radius: 8, x: 0, y: 4)
+
+                    LazyVStack(spacing: 12) {
+                        ForEach(items) { item in
+                            ItemRowReadOnly(item: item)
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+                .padding(.top, 16)
+                .padding(.bottom, 32)
+            }
+            .navigationTitle("Finish Trip")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") {
+                        onCancel()
+                    }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Confirm") {
+                        onConfirm()
+                    }
+                }
+            }
+        }
+        .presentationDetents([.medium, .large])
+        .presentationDragIndicator(.visible)
+    }
+}
+
 struct ItemRow: View {
     let item: CartItem
     let lineTotal: Double
@@ -637,7 +1001,11 @@ struct ItemRow: View {
             rowContent
                 .padding(16)
                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                .shadow(color: Color.primary.opacity(0.05), radius: 8, x: 0, y: 4)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 20, style: .continuous)
+                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                )
+                .shadow(color: Color.black.opacity(0.18), radius: 10, x: 0, y: 6)
                 .offset(x: offset)
                 .highPriorityGesture(dragGesture)
                 .onTapGesture {
@@ -657,11 +1025,17 @@ struct ItemRow: View {
         HStack(spacing: 12) {
             ZStack {
                 Circle()
-                    .fill(.ultraThinMaterial)
+                    .fill(
+                        LinearGradient(
+                            colors: [AppPalette.violet.opacity(0.7), AppPalette.sky.opacity(0.7)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
                     .frame(width: 44, height: 44)
                 Image(systemName: item.symbolName)
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(.white)
             }
 
             VStack(alignment: .leading, spacing: 4) {
@@ -702,10 +1076,16 @@ struct ItemRow: View {
                     Text("Delete")
                         .font(.caption2.weight(.semibold))
                 }
-                .foregroundStyle(.primary)
+                .foregroundStyle(.white)
                 .frame(width: 88)
                 .frame(maxHeight: .infinity)
-                .background(Color(.systemBackground))
+                .background(
+                    LinearGradient(
+                        colors: [AppPalette.berry, AppPalette.peach],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
             }
             .buttonStyle(.plain)
         }
@@ -761,7 +1141,6 @@ struct ItemRow: View {
 
 struct TripHistorySection: View {
     let trips: [TripSummary]
-    let onSelect: (TripSummary) -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -771,8 +1150,8 @@ struct TripHistorySection: View {
 
             VStack(spacing: 10) {
                 ForEach(trips) { trip in
-                    Button {
-                        onSelect(trip)
+                    NavigationLink {
+                        TripDetailView(trip: trip)
                     } label: {
                         TripHistoryRow(trip: trip)
                     }
@@ -813,54 +1192,45 @@ struct TripHistoryRow: View {
 
 struct TripDetailView: View {
     let trip: TripSummary
-    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 16) {
-                    HeaderCard(
-                        subtotal: trip.subtotal,
-                        taxAmount: trip.taxAmount,
-                        total: trip.total,
-                        includeTax: trip.includeTax
-                    )
+        ScrollView {
+            VStack(spacing: 16) {
+                HeaderCard(
+                    subtotal: trip.subtotal,
+                    taxAmount: trip.taxAmount,
+                    total: trip.total,
+                    includeTax: trip.includeTax
+                )
 
-                    VStack(alignment: .leading, spacing: 12) {
-                        Text("Trip Details")
-                            .font(.title3.weight(.semibold))
-                            .foregroundStyle(.primary)
-                        Text(trip.displayLocationName)
-                            .font(.subheadline.weight(.semibold))
-                            .foregroundStyle(.primary)
-                        Text(trip.date.formatted(date: .abbreviated, time: .shortened))
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(16)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-                    .shadow(color: Color.primary.opacity(0.05), radius: 8, x: 0, y: 4)
-
-                    LazyVStack(spacing: 12) {
-                        ForEach(trip.items) { item in
-                            ItemRowReadOnly(item: item)
-                        }
-                    }
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("Trip Details")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Text(trip.displayLocationName)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.primary)
+                    Text(trip.date.formatted(date: .abbreviated, time: .shortened))
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                .padding(.horizontal, 16)
-                .padding(.top, 16)
-                .padding(.bottom, 32)
-            }
-            .navigationTitle("Trip")
-            .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button("Close") {
-                        dismiss()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(16)
+                .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+                .shadow(color: Color.primary.opacity(0.05), radius: 8, x: 0, y: 4)
+
+                LazyVStack(spacing: 12) {
+                    ForEach(trip.items) { item in
+                        ItemRowReadOnly(item: item)
                     }
                 }
             }
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
+            .padding(.bottom, 32)
         }
+        .navigationTitle("Trip")
+        .navigationBarTitleDisplayMode(.inline)
     }
 }
 
@@ -871,11 +1241,17 @@ struct ItemRowReadOnly: View {
         HStack(spacing: 12) {
             ZStack {
                 Circle()
-                    .fill(.ultraThinMaterial)
+                    .fill(
+                        LinearGradient(
+                            colors: [AppPalette.peach.opacity(0.7), AppPalette.berry.opacity(0.7)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
                     .frame(width: 44, height: 44)
                 Image(systemName: item.symbolName)
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(.primary)
+                    .foregroundStyle(.white)
             }
 
             VStack(alignment: .leading, spacing: 4) {
@@ -926,6 +1302,29 @@ final class LocationProvider: NSObject, ObservableObject, CLLocationManagerDeleg
     }
 
     func reverseGeocodeName(from location: CLLocation) async -> String? {
+        if #available(iOS 26.0, *) {
+            do {
+                guard let request = MKReverseGeocodingRequest(location: location),
+                      let address = try await request.mapItems.first?.addressRepresentations else {
+                    return nil
+                }
+                if let city = address.cityName, let region = address.regionName {
+                    return "\(city), \(region)"
+                }
+                if let city = address.cityName {
+                    return city
+                }
+                return address.regionName
+            } catch {
+                return nil
+            }
+        } else {
+            return await reverseGeocodeLegacy(from: location)
+        }
+    }
+
+    @available(iOS, deprecated: 26.0)
+    private func reverseGeocodeLegacy(from location: CLLocation) async -> String? {
         let geocoder = CLGeocoder()
         do {
             let placemarks = try await geocoder.reverseGeocodeLocation(location)
@@ -960,7 +1359,7 @@ struct EmptyStateCard: View {
         VStack(spacing: 12) {
             Image(systemName: "cart")
                 .font(.system(size: 36, weight: .semibold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(AppPalette.sky)
             Text("Your cart is empty")
                 .font(.headline)
             Text("Add items to start tracking your trip.")
@@ -970,7 +1369,11 @@ struct EmptyStateCard: View {
         .frame(maxWidth: .infinity)
         .padding(28)
         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
-        .shadow(color: Color.primary.opacity(0.05), radius: 12, x: 0, y: 6)
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(Color.white.opacity(0.08), lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.2), radius: 12, x: 0, y: 6)
         .multilineTextAlignment(.center)
     }
 }

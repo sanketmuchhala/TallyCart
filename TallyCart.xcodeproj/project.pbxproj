@@ -29,9 +29,22 @@
 		A8A193E52F58364100B431AF /* TallyCartUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TallyCartUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		A8A193FB2F58488700B431AF /* Exceptions for "TallyCart" folder in "TallyCart" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = A8A193CD2F58363F00B431AF /* TallyCart */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		A8A193D02F58363F00B431AF /* TallyCart */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				A8A193FB2F58488700B431AF /* Exceptions for "TallyCart" folder in "TallyCart" target */,
+			);
 			path = TallyCart;
 			sourceTree = "<group>";
 		};
@@ -400,6 +413,8 @@
 				DEVELOPMENT_TEAM = 83G5VWTNT3;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TallyCart/Info.plist;
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Tally​Cart uses your location to label trips with a nearby place.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -432,6 +447,8 @@
 				DEVELOPMENT_TEAM = 83G5VWTNT3;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TallyCart/Info.plist;
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Tally​Cart uses your location to label trips with a nearby place.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

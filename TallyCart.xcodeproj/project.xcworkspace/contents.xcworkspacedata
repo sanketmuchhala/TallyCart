@@ -4,4 +4,20 @@
    <FileRef
       location = "self:">
    </FileRef>
+   <Group
+      location = "group:Screenshots"
+      name = "Screenshots">
+      <FileRef
+         location = "group:home.svg">
+      </FileRef>
+      <FileRef
+         location = "group:review.svg">
+      </FileRef>
+      <FileRef
+         location = "group:trip-detail.svg">
+      </FileRef>
+   </Group>
+   <FileRef
+      location = "group:README.md">
+   </FileRef>
 </Workspace>
