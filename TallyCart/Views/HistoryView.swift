@@ -4,25 +4,17 @@ struct HistoryView: View {
     @ObservedObject var viewModel: AppViewModel
     @ObservedObject var authViewModel: AuthViewModel
     var body: some View {
-        NavigationStack {
-            VStack(spacing: Tokens.Spacing.m) {
-                if viewModel.isLoading {
-                    LoadingStateView(title: "Loading trips")
-                } else if viewModel.state.trips.isEmpty {
-                    EmptyStateView(
-                        systemImage: "clock",
-                        title: "No trips yet",
-                        subtitle: "Finished trips will appear here."
-                    )
-                } else {
-                    historyList
-                }
-            }
-            .navigationTitle("Trips")
-            .toolbar {
-                ToolbarItem(placement: .topBarTrailing) {
-                    AccountMenu(viewModel: authViewModel)
-                }
+        VStack(spacing: Tokens.Spacing.m) {
+            if viewModel.isLoading {
+                LoadingStateView(title: "Loading trips")
+            } else if viewModel.state.trips.isEmpty {
+                EmptyStateView(
+                    systemImage: "clock",
+                    title: "No trips yet",
+                    subtitle: "Finished trips will appear here."
+                )
+            } else {
+                historyList
             }
         }
     }
@@ -45,51 +37,6 @@ struct HistoryView: View {
             }
         }
         .listStyle(.insetGrouped)
-    }
-}
-
-private struct AccountMenu: View {
-    @ObservedObject var viewModel: AuthViewModel
-
-    var body: some View {
-        Menu {
-            Text(viewModel.displayName)
-                .font(.headline)
-            Button("Profile") {}
-            Button(role: .destructive) {
-                Task { await viewModel.signOut() }
-            } label: {
-                Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
-            }
-        } label: {
-            ProfileImageView(url: viewModel.avatarURL)
-        }
-        .accessibilityLabel(Text("Account"))
-    }
-}
-
-private struct ProfileImageView: View {
-    let url: URL?
-
-    var body: some View {
-        Group {
-            if let url {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().scaledToFill()
-                    default:
-                        Image(systemName: "person.crop.circle.fill")
-                    }
-                }
-            } else {
-                Image(systemName: "person.crop.circle.fill")
-            }
-        }
-        .frame(width: 28, height: 28)
-        .clipShape(Circle())
-        .overlay(Circle().stroke(Color.primary.opacity(0.1), lineWidth: 1))
-        .accessibilityHidden(true)
     }
 }
 

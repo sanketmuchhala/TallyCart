@@ -22,113 +22,107 @@ struct CartView: View {
     }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 16) {
-                    HeaderCard(
-                        subtotal: viewModel.subtotal,
-                        taxAmount: viewModel.taxAmount,
-                        total: viewModel.total,
-                        includeTax: viewModel.state.currentCart.includeTax
-                    )
+        ScrollView {
+            VStack(spacing: 16) {
+                HeaderCard(
+                    subtotal: viewModel.subtotal,
+                    taxAmount: viewModel.taxAmount,
+                    total: viewModel.total,
+                    includeTax: viewModel.state.currentCart.includeTax
+                )
 
-                    StorePickerView(
-                        stores: viewModel.state.stores,
-                        selectedStoreId: viewModel.state.selectedStoreId,
-                        onSelect: { id in
-                            viewModel.selectStore(id)
-                        },
-                        onAdd: { showAddStore = true }
-                    )
+                StorePickerView(
+                    stores: viewModel.state.stores,
+                    selectedStoreId: viewModel.state.selectedStoreId,
+                    onSelect: { id in
+                        viewModel.selectStore(id)
+                    },
+                    onAdd: { showAddStore = true }
+                )
 
-                    PlannedListCard(
-                        store: viewModel.selectedStore,
-                        onAdd: { showAddPlannedItem = true },
-                        onMoveToCart: { planned in
-                            applyPlannedItem(planned)
-                        },
-                        onDelete: { id in
-                            guard let storeId = viewModel.selectedStore?.id else { return }
-                            viewModel.deletePlannedItem(storeId: storeId, itemId: id)
-                        }
-                    )
-
-                    AddItemCard(
-                        itemName: $itemName,
-                        priceText: $priceText,
-                        quantity: $quantity,
-                        includeTax: viewModel.state.currentCart.includeTax,
-                        taxRateText: $taxRateText,
-                        focusedField: $focusedField,
-                        priceError: priceError,
-                        addDisabled: !canAdd,
-                        onToggleTax: { include in
-                            viewModel.updateIncludeTax(include)
-                        },
-                        onTaxRateChanged: { newValue in
-                            viewModel.updateTaxRate(newValue)
-                        },
-                        onAdd: addItem
-                    )
-
-                    ItemList(items: viewModel.state.currentCart.items, onDelete: viewModel.deleteItem, onQuantityChange: viewModel.updateQuantity)
-
-                    HStack(spacing: 12) {
-                        Button("New Trip") {
-                            triggerHaptics()
-                            showClearConfirm = true
-                        }
-                        .buttonStyle(.bordered)
-                        .disabled(viewModel.state.currentCart.items.isEmpty)
-
-                        Button("Finish Trip") {
-                            triggerHaptics()
-                            viewModel.finishTrip()
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(viewModel.state.currentCart.items.isEmpty || viewModel.selectedStore == nil)
+                PlannedListCard(
+                    store: viewModel.selectedStore,
+                    onAdd: { showAddPlannedItem = true },
+                    onMoveToCart: { planned in
+                        applyPlannedItem(planned)
+                    },
+                    onDelete: { id in
+                        guard let storeId = viewModel.selectedStore?.id else { return }
+                        viewModel.deletePlannedItem(storeId: storeId, itemId: id)
                     }
+                )
+
+                AddItemCard(
+                    itemName: $itemName,
+                    priceText: $priceText,
+                    quantity: $quantity,
+                    includeTax: viewModel.state.currentCart.includeTax,
+                    taxRateText: $taxRateText,
+                    focusedField: $focusedField,
+                    priceError: priceError,
+                    addDisabled: !canAdd,
+                    onToggleTax: { include in
+                        viewModel.updateIncludeTax(include)
+                    },
+                    onTaxRateChanged: { newValue in
+                        viewModel.updateTaxRate(newValue)
+                    },
+                    onAdd: addItem
+                )
+
+                ItemList(items: viewModel.state.currentCart.items, onDelete: viewModel.deleteItem, onQuantityChange: viewModel.updateQuantity)
+
+                HStack(spacing: 12) {
+                    Button("New Trip") {
+                        triggerHaptics()
+                        showClearConfirm = true
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(viewModel.state.currentCart.items.isEmpty)
+
+                    Button("Finish Trip") {
+                        triggerHaptics()
+                        viewModel.finishTrip()
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .disabled(viewModel.state.currentCart.items.isEmpty || viewModel.selectedStore == nil)
                 }
-                .padding(16)
             }
-            .navigationTitle("TallyCart")
-            .toolbar {
-                ToolbarItemGroup(placement: .keyboard) {
-                    Spacer()
-                    Button("Done") { focusedField = nil }
-                }
-                ToolbarItem(placement: .topBarTrailing) {
-                    AccountMenu(viewModel: authViewModel)
-                }
+            .padding(16)
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("Done") { focusedField = nil }
             }
-            .sheet(isPresented: $showAddStore) {
-                AddStoreView { name, colorKey in
-                    viewModel.addStore(name: name, colorKey: colorKey)
-                }
+        }
+        .sheet(isPresented: $showAddStore) {
+            AddStoreView { name, colorKey in
+                viewModel.addStore(name: name, colorKey: colorKey)
             }
-            .sheet(isPresented: $showAddPlannedItem) {
-                AddPlannedItemView { name, quantity in
-                    guard let storeId = viewModel.selectedStore?.id else { return }
-                    viewModel.addPlannedItem(storeId: storeId, name: name, quantity: quantity)
-                }
+        }
+        .sheet(isPresented: $showAddPlannedItem) {
+            AddPlannedItemView { name, quantity in
+                guard let storeId = viewModel.selectedStore?.id else { return }
+                viewModel.addPlannedItem(storeId: storeId, name: name, quantity: quantity)
             }
-            .alert("Start a new trip?", isPresented: $showClearConfirm) {
-                Button("Cancel", role: .cancel) {}
-                Button("Clear", role: .destructive) {
-                    viewModel.clearCart(keepTaxSettings: true)
-                    resetInputs()
-                }
-            } message: {
-                Text("This will clear all items in your cart.")
+        }
+        .alert("Start a new trip?", isPresented: $showClearConfirm) {
+            Button("Cancel", role: .cancel) {}
+            Button("Clear", role: .destructive) {
+                viewModel.clearCart(keepTaxSettings: true)
+                resetInputs()
             }
-            .onAppear {
-                taxRateText = viewModel.state.currentCart.taxRate.percentString
-            }
-            .onChange(of: viewModel.state.currentCart.taxRate) { _, newValue in
-                let formatted = newValue.percentString
-                if formatted != taxRateText {
-                    taxRateText = formatted
-                }
+        } message: {
+            Text("This will clear all items in your cart.")
+        }
+        .onAppear {
+            taxRateText = viewModel.state.currentCart.taxRate.percentString
+        }
+        .onChange(of: viewModel.state.currentCart.taxRate) { _, newValue in
+            let formatted = newValue.percentString
+            if formatted != taxRateText {
+                taxRateText = formatted
             }
         }
     }
@@ -250,49 +244,6 @@ private struct SyncStatusView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
-    }
-}
-
-private struct AccountMenu: View {
-    @ObservedObject var viewModel: AuthViewModel
-
-    var body: some View {
-        Menu {
-            Text(viewModel.displayName)
-                .font(.headline)
-            Button("Profile") {}
-            Button(role: .destructive) {
-                Task { await viewModel.signOut() }
-            } label: {
-                Label("Sign Out", systemImage: "rectangle.portrait.and.arrow.right")
-            }
-        } label: {
-            ProfileImageView(url: viewModel.avatarURL)
-        }
-    }
-}
-
-private struct ProfileImageView: View {
-    let url: URL?
-
-    var body: some View {
-        Group {
-            if let url {
-                AsyncImage(url: url) { phase in
-                    switch phase {
-                    case .success(let image):
-                        image.resizable().scaledToFill()
-                    default:
-                        Image(systemName: "person.crop.circle.fill")
-                    }
-                }
-            } else {
-                Image(systemName: "person.crop.circle.fill")
-            }
-        }
-        .frame(width: 28, height: 28)
-        .clipShape(Circle())
-        .overlay(Circle().stroke(Color.primary.opacity(0.1), lineWidth: 1))
     }
 }
 
