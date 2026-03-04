@@ -1,5 +1,7 @@
 # TallyCart
 
+Screenshots: ![Home](Screenshots/home.svg) ![Review](Screenshots/review.svg) ![Trip Detail](Screenshots/trip-detail.svg)
+
 A polished, single-screen iOS app for tracking a shopping trip with subtotal, tax, and total in real time. The experience is designed to feel like a finished product: clear hierarchy, bold materials, and smooth flows for adding items, reviewing a trip, and revisiting history.
 
 ## Features
@@ -25,10 +27,3 @@ A polished, single-screen iOS app for tracking a shopping trip with subtotal, ta
 1. Open the Xcode project.
 2. Select the **TallyCart** scheme and an iOS 17+ simulator or device.
 3. Run.
-
-## Screenshots
-> Replace these placeholders with real screenshots from your simulator/device.
-
-![Home](Screenshots/home.svg)
-![Review](Screenshots/review.svg)
-![Trip Detail](Screenshots/trip-detail.svg)
