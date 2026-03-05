@@ -31,6 +31,7 @@
 		A8A193CE2F58363F00B431AF /* TallyCart.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TallyCart.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A8A193DB2F58364100B431AF /* TallyCartTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TallyCartTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		A8A193E52F58364100B431AF /* TallyCartUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = TallyCartUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		A8A9D4302F5900D4002327B6 /* phase2.sql */ = {isa = PBXFileReference; lastKnownFileType = text; path = phase2.sql; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -98,6 +99,7 @@
 				A8A193E82F58364100B431AF /* TallyCartUITests */,
 				A8A9D3E02F58CDAA002327B6 /* Frameworks */,
 				A8A193CF2F58363F00B431AF /* Products */,
+				A8A9D42F2F59009D002327B6 /* Migrations */,
 			);
 			sourceTree = "<group>";
 		};
@@ -116,6 +118,14 @@
 			children = (
 			);
 			name = Frameworks;
+			sourceTree = "<group>";
+		};
+		A8A9D42F2F59009D002327B6 /* Migrations */ = {
+			isa = PBXGroup;
+			children = (
+				A8A9D4302F5900D4002327B6 /* phase2.sql */,
+			);
+			path = Migrations;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */

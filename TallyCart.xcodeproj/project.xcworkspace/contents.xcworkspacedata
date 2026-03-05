@@ -23,4 +23,14 @@
    <FileRef
       location = "group:SETUP_NOTES.md">
    </FileRef>
+   <Group
+      location = "group:Migrations"
+      name = "Migrations">
+      <FileRef
+         location = "group:phase2.sql">
+      </FileRef>
+   </Group>
+   <FileRef
+      location = "group:PHASE2_TEST_PLAN.md">
+   </FileRef>
 </Workspace>

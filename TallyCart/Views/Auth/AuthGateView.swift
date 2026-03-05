@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct AuthGateView: View {
-    @ObservedObject var appViewModel: AppViewModel
+    @ObservedObject var appViewModel: Phase2ViewModel
     @ObservedObject var authViewModel: AuthViewModel
     @State private var didSync = false
     @State private var showSplash = true
@@ -31,7 +31,7 @@ struct AuthGateView: View {
         .onChange(of: authViewModel.isAuthenticated) { _, isAuthenticated in
             if !isAuthenticated {
                 didSync = false
-                appViewModel.clearSupabase()
+                appViewModel.clear()
             }
         }
     }
@@ -42,8 +42,8 @@ struct AuthGateView: View {
               let client = authViewModel.supabaseClient,
               let userId = authViewModel.userId else { return }
         didSync = true
-        appViewModel.configureSupabase(client: client, userId: userId)
-        await appViewModel.syncFromSupabase()
+        appViewModel.configure(client: client, userId: userId)
+        await appViewModel.loadInitialData()
     }
 }
 

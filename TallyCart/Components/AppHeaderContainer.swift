@@ -11,5 +11,6 @@ struct AppHeaderContainer<Content: View>: View {
         VStack(spacing: Tokens.Spacing.m) {
             content
         }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     }
 }
